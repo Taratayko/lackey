@@ -1,0 +1,16 @@
+[Unit]
+Description=Lackey outbound SiteFeedback HTTPS synchronization
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botadmin
+WorkingDirectory=/opt/commune-mesh-lackey
+ExecStart=/opt/commune-mesh-lackey/.venv/bin/python site_feedback_sync.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
