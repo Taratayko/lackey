@@ -75,6 +75,9 @@ class Database:
         from adapters.mongo.site_feedback import SiteFeedbackRepository
         self._site_feedback_repo = SiteFeedbackRepository(self._db)
         await self._site_feedback_repo.ensure_indexes()
+        from adapters.mongo.menu_flow import MongoMenuFlowRepository
+        self._menu_flow_repo = MongoMenuFlowRepository(self._db)
+        await self._menu_flow_repo.ensure_indexes()
         await self._db.stats_daily.create_index(
             [("from_chat_id", 1), ("to_chat_id", 1), ("day", 1)], unique=True
         )
@@ -94,6 +97,10 @@ class Database:
     def get_site_feedback_repository(self):
         """MongoDB-backed site feedback, initialized in connect()."""
         return self._site_feedback_repo
+
+    def get_menu_flow_repository(self):
+        """Шаги меню «В гости» / «Вписаться», initialized in connect()."""
+        return self._menu_flow_repo
 
     def get_repositories(self):
         """Create Mongo repository bundle for application services."""
@@ -155,9 +162,15 @@ class Database:
         relay_topic_id: int | None = None,
         origin_channel: str = "telegram",
         relay_channel: str = "telegram",
+        open_identity: bool = False,
     ):
-        """One document per logical delivery; all visible Telegram IDs are aliases."""
+        """One document per logical delivery; all visible Telegram IDs are aliases.
+
+        ``open_identity`` (только True) — диалог начат заявкой «В гости»/«Вписаться»,
+        все ответы в нём идут открыто, даже при /anon; флаг наследуется по цепочке.
+        """
         await self.threads.insert_one({
+            **({"open_identity": True} if open_identity else {}),
             "origin_channel": origin_channel,
             "relay_channel": relay_channel,
             "origin_external_chat_id": str(origin_chat_id),

@@ -79,6 +79,7 @@ async def _do_relay_reply(
             current_topic_id=msg.message_thread_id,
             current_message_ids=current_message_ids,
             captionless_media=bool(msg.sticker or msg.video_note),
+            open_label=sender_mention(msg),
         )
     )
     if result.user_error:

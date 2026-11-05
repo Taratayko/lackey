@@ -27,6 +27,9 @@ class ReplyRelayRequest:
     channel: str = "telegram"
     current_topic_id: int | None = None
     current_message_ids: tuple[int, ...] = ()
+    # Видимое имя автора. Используется вместо sender_label (который может быть
+    # анонимным), если диалог начат заявкой «В гости»/«Вписаться».
+    open_label: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attachments", tuple(self.attachments))
@@ -49,6 +52,7 @@ class _ReplyTarget:
     chat_id: int
     message_id: int
     topic_id: int | None
+    open_identity: bool = False
 
 
 class ReplyService:
@@ -76,7 +80,8 @@ class ReplyService:
             request.current_message_id,
         )
         reply_to = MessageRef(target_ref, target.message_id)
-        caption = format_reply_relay_text(request.sender_label, request.text)
+        label = request.open_label if (target.open_identity and request.open_label) else request.sender_label
+        caption = format_reply_relay_text(label, request.text)
         attachments = tuple(request.attachments)
         if len(attachments) > 1:
             parts = ((DeliveryPart("text", text=caption),
@@ -95,6 +100,7 @@ class ReplyService:
             origin=origin, target=target_ref, parts=parts, reply_to=reply_to,
             origin_message_ids=request.current_message_ids,
             count_stat=False,
+            open_identity=target.open_identity,
         ))
         ids = tuple(int(ref.message_id) for ref in outcome.sent)
         return ReplyRelayResult(
@@ -136,4 +142,7 @@ class ReplyService:
         if topic_id is None and "origin_topic_id" not in thread and "relay_topic_id" not in thread:
             chat = await self._repositories.chats.get_chat_by_id(chat_id)
             topic_id = chat.get("topic_id") if chat else None
-        return _ReplyTarget(chat_id, msg_id, int(topic_id) if topic_id else None)
+        return _ReplyTarget(
+            chat_id, msg_id, int(topic_id) if topic_id else None,
+            bool(thread.get("open_identity")),
+        )

@@ -9,7 +9,9 @@ from aiogram.types import InputRichMessage, Message
 from database import db
 
 
-async def send_rich(msg: Message, html: str, topic_id: int | None = None) -> Message:
+async def send_rich(
+    msg: Message, html: str, topic_id: int | None = None, reply_markup=None,
+) -> Message:
     """Отправить rich-message (Bot API 10.1+, sendRichMessage; нужен aiogram >= 3.29).
 
     В отличие от parse_mode="HTML", rich-message поддерживает настоящие
@@ -20,6 +22,8 @@ async def send_rich(msg: Message, html: str, topic_id: int | None = None) -> Mes
         "chat_id": msg.chat.id,
         "rich_message": InputRichMessage(html=html),
     }
+    if reply_markup is not None:
+        kwargs["reply_markup"] = reply_markup
     effective_topic_id = topic_id if topic_id is not None else msg.message_thread_id
     if effective_topic_id:
         kwargs["message_thread_id"] = effective_topic_id

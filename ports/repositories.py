@@ -64,6 +64,7 @@ class ThreadRepositoryPort(Protocol):
         relay_topic_id: int | None = None,
         origin_channel: str = "telegram",
         relay_channel: str = "telegram",
+        open_identity: bool = False,
     ) -> None:
         """Store mapping from original message to relayed message."""
         ...

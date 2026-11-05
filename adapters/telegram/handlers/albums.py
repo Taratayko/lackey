@@ -98,6 +98,7 @@ async def relay_album(items: list[Message], bot: Bot) -> None:
                     sender_label=label,
                     text=first.caption,
                     attachments=attachments,
+                    open_label=sender_mention(first),
                 )
             )
             if result.user_error:

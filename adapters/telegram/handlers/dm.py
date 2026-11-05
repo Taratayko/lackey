@@ -13,6 +13,7 @@ from adapters.telegram import (
 from application.services import RelayService, RelayTextRequest
 from database import db
 from presentation.formatters import escape_html
+from adapters.telegram.menu_keyboards import reply_menu_keyboard
 from presentation.texts import DM_FORMAT_HINT, DM_WELCOME, DM_WELCOME_BACK
 
 from .admin import build_full_list_text
@@ -43,7 +44,7 @@ def is_not_real_reply(msg: Message) -> bool:
 
 async def _send_dm_welcome(msg: Message) -> None:
     """Отправить приветствие + полный список коммун новому пользователю."""
-    await send_rich(msg, DM_WELCOME)
+    await send_rich(msg, DM_WELCOME, reply_markup=reply_menu_keyboard())
     full_list = await build_full_list_text()
     await send_rich(msg, full_list)
 
@@ -62,7 +63,7 @@ async def cmd_start(msg: Message) -> None:
     if is_new:
         await _send_dm_welcome(msg)
     else:
-        await send_rich(msg, DM_WELCOME_BACK)
+        await send_rich(msg, DM_WELCOME_BACK, reply_markup=reply_menu_keyboard())
 
 
 @router.message(Command("anon"))

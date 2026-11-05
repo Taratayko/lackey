@@ -49,6 +49,8 @@ class DeliveryPlan:
     reply_to: MessageRef | None = None
     count_stat: bool = True
     mark_reaction: bool = True
+    # Диалог начат заявкой «В гости»/«Вписаться»: /anon в нём не действует.
+    open_identity: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +131,7 @@ class DeliveryPipeline:
                 relay_topic_id=relay_topic,
                 origin_channel=plan.origin.channel,
                 relay_channel=plan.target.channel.value,
+                **({"open_identity": True} if plan.open_identity else {}),
             )
 
         async def add_stat() -> None:
