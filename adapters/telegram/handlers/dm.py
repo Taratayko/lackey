@@ -26,6 +26,7 @@ from .common import (
     resolve_target_only,
     send_rich,
     sender_mention,
+    text_as_written,
 )
 
 router = Router()
@@ -116,6 +117,8 @@ async def handle_dm_media_message(msg: Message, bot: Bot) -> None:
         target_chat = await db.get_chat_by_name(only_name)
         if not target_chat:
             target_chat = await resolve_target_only(source)
+        if target_chat:
+            extra_text = text_as_written(source)
 
     if not target_chat:
         resolved = await resolve_chat_and_text(source)

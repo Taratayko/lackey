@@ -234,6 +234,15 @@ async def on_flow_text(msg: Message, bot: Bot) -> None:
         await msg.reply(SEND_FAILED)
 
 
+async def send_main_menu(msg: Message) -> None:
+    """После отправленного послания снова показать главное меню (новым сообщением)."""
+    try:
+        await send_rich(msg, rich_screen(MENU_TITLE), reply_markup=main_menu_kb())
+    except Exception:
+        # Заявка уже доставлена: сбой показа меню не должен выглядеть как «не доставлено».
+        logger.exception("Cannot show main menu after delivered request")
+
+
 async def deliver_request(
     bot: Bot, msg: Message, svc: MenuFlowService, flow: dict, chat: dict, body: str,
 ) -> None:
@@ -249,6 +258,7 @@ async def deliver_request(
         await strip_keyboard(bot, msg.chat.id, flow.get("screen_message_id"))
         if result.user_error:  # частичная доставка / не записан mapping
             await msg.reply(result.user_error)
+        await send_main_menu(msg)
     elif result.user_error:
         await msg.reply(result.user_error)  # сценарий остаётся: можно отправить ещё раз
     elif result.skipped:

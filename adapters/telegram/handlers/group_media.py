@@ -5,7 +5,10 @@ from aiogram.types import Message
 from adapters.telegram import TelegramChannelAdapter, telegram_message_to_attachments
 from application.services import RelayService, RelayTextRequest
 from database import db
-from .common import extract_target_only, is_real_reply, resolve_chat_and_text, resolve_target_only, sender_mention
+from .common import (
+    extract_target_only, is_real_reply, resolve_chat_and_text, resolve_target_only,
+    sender_mention, text_as_written,
+)
 
 
 async def relay_group_media(msg: Message, bot: Bot):
@@ -14,7 +17,7 @@ async def relay_group_media(msg: Message, bot: Bot):
     source = msg.caption or msg.text or ""
     only_name = extract_target_only(source)
     target = await resolve_target_only(source) if only_name else None
-    extra = ""
+    extra = text_as_written(source) if target else ""
     if not target:
         parsed = await resolve_chat_and_text(source)
         if parsed:

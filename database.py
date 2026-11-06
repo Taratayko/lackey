@@ -42,6 +42,7 @@ Stage 3 additional collections:
 """
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import settings
+from domain.names import yo_insensitive_regex
 
 
 class Database:
@@ -119,12 +120,27 @@ class Database:
         return await self.chats.find_one({"chat_id": chat_id})
 
     async def get_chat_by_name(self, name: str) -> dict | None:
-        """Поиск чата по основному имени или алиасу (регистронезависимо)."""
+        """Поиск чата по основному имени или алиасу.
+
+        Регистр не важен, «е» и «ё» не различаются: к коммуне «Всё просто»
+        можно обратиться как «Все просто» (и наоборот).
+        """
         slug = name.strip().lower()
-        return await self.chats.find_one({
+        # Сначала точное совпадение (по индексу), чтобы при редком конфликте
+        # «все»/«всё» у разных коммун выигрывала та, что написана буква в букву.
+        exact = await self.chats.find_one({
             "$or": [
                 {"slug": slug},
                 {"aliases": slug}
+            ]
+        })
+        if exact or not slug:
+            return exact
+        pattern = yo_insensitive_regex(slug)
+        return await self.chats.find_one({
+            "$or": [
+                {"slug": {"$regex": pattern}},
+                {"aliases": {"$regex": pattern}},
             ]
         })
 

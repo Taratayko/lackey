@@ -16,7 +16,7 @@ from adapters.telegram import TelegramChannelAdapter, telegram_message_to_attach
 from application.services import RelayService, RelayTextRequest, ReplyRelayRequest, ReplyService
 from application.services.identity import sender_label_for_chat
 from database import db
-from .common import extract_target_only, resolve_chat_and_text, resolve_target_only, sender_mention
+from .common import extract_target_only, resolve_chat_and_text, resolve_target_only, sender_mention, text_as_written
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ async def relay_album(items: list[Message], bot: Bot) -> None:
     if not source_text:
         return
     target = await resolve_target_only(source_text) if extract_target_only(source_text) else None
-    extra = ""
+    extra = text_as_written(source_text) if target else ""
     if not target:
         resolved = await resolve_chat_and_text(source_text)
         if resolved:

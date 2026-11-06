@@ -12,6 +12,7 @@ from __future__ import annotations
 from .admin_details import AdminCommandResult, AdminDetails
 from typing import Literal
 
+from domain.names import same_name
 from ports.repositories import RepositoryBundle
 from presentation.formatters import escape_html, escape_html_attr
 
@@ -272,8 +273,9 @@ class AdminService(AdminDetails):
             return AdminCommandResult("❌ Чат не зарегистрирован. Сначала /addchat")
 
         aliases = chat.get("aliases", [])
-        if alias in aliases:
-            return AdminCommandResult("❌ Такой алиас уже есть")
+        # «Всё просто» и «Все просто» — одно имя: лишний алиас не создаём.
+        if any(same_name(alias, existing) for existing in aliases) or same_name(alias, str(chat.get("slug") or "")):
+            return AdminCommandResult("❌ Такой алиас уже есть (е и ё не различаются)")
 
         aliases.append(alias)
         await self._repositories.chats.update_chat(chat_id, {"aliases": aliases})
@@ -292,12 +294,13 @@ class AdminService(AdminDetails):
             return AdminCommandResult("❌ Чат не зарегистрирован")
 
         aliases = chat.get("aliases", [])
-        if alias not in aliases:
+        stored = next((existing for existing in aliases if same_name(alias, existing)), None)
+        if stored is None:
             return AdminCommandResult("❌ Алиас не найден")
 
-        aliases.remove(alias)
+        aliases.remove(stored)
         await self._repositories.chats.update_chat(chat_id, {"aliases": aliases})
-        return AdminCommandResult(f"✅ Алиас <b>{alias}</b> удалён")
+        return AdminCommandResult(f"✅ Алиас <b>{stored}</b> удалён")
 
     async def set_link(self, actor_user_id: int | None, chat_id: int, raw_text: str | None) -> AdminCommandResult | None:
         if not self.is_owner(actor_user_id):

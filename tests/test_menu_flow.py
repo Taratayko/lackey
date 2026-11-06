@@ -429,6 +429,19 @@ class HandlerFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r[1] for r in self.channel.reactions], ["✍"])
         self.assertEqual(int(self.channel.reactions[-1][0].message_id), 77)
         self.assertIsNone(await self.flows.get(5))                  # сценарий закрыт
+        self.assertEqual(final.sent[-1][0], "<p>🪁Меню:</p>")      # после отправки — снова меню
+        self.assertIsNotNone(final.sent[-1][1])
+
+    async def test_menu_not_shown_when_delivery_fails(self):
+        screen = FakeMessage("🪁Меню:", message_id=50)
+        await self.press(screen, "go", "guest")
+        await self.press(screen, "city", "spb")
+        await self.press(screen, "c", "-5")
+        await self.press(screen, "when", "after")
+        self.channel.fail_kind = "text"
+        final = FakeMessage("можно?")
+        await self.menu.on_flow_text(final, self.bot)
+        self.assertEqual(final.sent, [])
 
     async def test_guest_flow_gets_pencil_reaction(self):
         screen = FakeMessage("🪁Меню:", message_id=50)

@@ -119,8 +119,21 @@ async def resolve_target_only(text: str) -> dict | None:
     return await db.get_chat_by_name(name)
 
 
+def text_as_written(source: str | None) -> str:
+    """Текст для пересылки в исходном виде: вместе с названием/алиасом коммуны.
+
+    «Всё просто! Хай!» уходит как «Всё просто! Хай!», «Простые! Хай!» — как
+    «Простые! Хай!» (то, что именно написал отправитель, без нормализации).
+    """
+    return (source or "").strip()
+
+
 async def resolve_chat_and_text(full_text: str, caption: str | None = None) -> tuple[dict, str] | None:
-    """Разобрать текст команды и вернуть (chat_doc, message_text) или None."""
+    """Разобрать текст команды и вернуть (chat_doc, text_as_written) или None.
+
+    Второй элемент — исходный текст целиком, включая «ИмяКоммуны!» так, как
+    его написал отправитель (см. text_as_written).
+    """
     source = full_text or caption or ""
     if not source:
         return None
@@ -137,7 +150,9 @@ async def resolve_chat_and_text(full_text: str, caption: str | None = None) -> t
     if not resolved:
         resolved = await resolve_target(source)
 
-    return resolved
+    if resolved:
+        return resolved[0], text_as_written(source)
+    return None
 
 
 def is_real_reply(msg: Message) -> bool:

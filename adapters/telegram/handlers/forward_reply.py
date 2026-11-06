@@ -53,7 +53,8 @@ async def forward_replied_message(
         origin_message_id=msg.message_id,
         origin_topic_id=msg.message_thread_id,
         target_chat=target,
-        text=intent.comment,
+        # Название/алиас коммуны уходит в исходном виде: «Всё просто! комментарий».
+        text=(msg.text or msg.caption or "").strip(),
         sender_label=sender_mention(msg),
         sender_user_id=msg.from_user.id if msg.from_user else None,
         forward_source=MessageRef(
