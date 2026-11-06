@@ -7,14 +7,21 @@
 
 from aiogram import Router
 
-from . import admin, diagnostics, dm, main, albums, menu, site_feedback, site_feedback_admin
+from . import (
+    admin, albums, diagnostics, dm, main, menu, moderation, site_feedback, site_feedback_admin,
+)
 
 router = Router()
+
+# Журнал сообщений участников для зачистки при бане: не потребляет события.
+router.message.outer_middleware(moderation.MessageLogMiddleware())
 
 # Важен порядок: команды админки должны регистрироваться до
 # широких relay/media handlers из main.py.
 router.include_router(admin.router)
 router.include_router(diagnostics.router)
+# Модерация (/ban /mute и слова «бан»/«мут») — до широких relay-хэндлеров из main.py.
+router.include_router(moderation.router)
 router.include_router(site_feedback_admin.router)
 # Меню раньше site_feedback и DM: кнопка `(つ✧ω✧)つ` и шаги сценариев не должны
 # попасть ни в черновик отзыва, ни в обычную ретрансляцию.

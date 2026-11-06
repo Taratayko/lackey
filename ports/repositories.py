@@ -8,6 +8,7 @@ Current handlers can still use database.py directly until later patches.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from domain.models import ChannelRef, MessageRef
@@ -134,6 +135,51 @@ class DeliveryClaimPort(Protocol):
     async def release_for_migration(self, key: str) -> None: ...
 
 
+@runtime_checkable
+class ModerationRepositoryPort(Protocol):
+    """Журнал активных банов и мутов (источник истины — сам Telegram)."""
+
+    async def record(
+        self,
+        chat_id: int,
+        user_id: int,
+        kind: str,
+        *,
+        username: str | None,
+        full_name: str | None,
+        actor_user_id: int | None,
+        reason: str | None,
+        until: datetime | None,
+    ) -> None:
+        """Записать/обновить действие (kind: "ban" | "mute")."""
+        ...
+
+    async def remove(self, chat_id: int, user_id: int, kind: str) -> None:
+        """Удалить запись о действии."""
+        ...
+
+    async def find_by_username(self, chat_id: int, username: str, kind: str) -> dict | None:
+        """Найти активную запись по username (без @, регистр не важен)."""
+        ...
+
+    async def list_active(self, chat_id: int, kind: str) -> list[dict]:
+        """Активные записи чата; истёкшие муты не возвращаются."""
+        ...
+
+
+@runtime_checkable
+class MessageLogPort(Protocol):
+    """Журнал id сообщений участников — нужен, чтобы зачистить их при бане."""
+
+    async def save(self, chat_id: int, user_id: int, message_id: int) -> None:
+        """Запомнить сообщение участника."""
+        ...
+
+    async def pop_user_messages(self, chat_id: int, user_id: int) -> list[int]:
+        """Вернуть id сообщений участника в чате и стереть их из журнала."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class RepositoryBundle:
     """Grouped repositories for application services."""
@@ -143,3 +189,5 @@ class RepositoryBundle:
     stats: StatsRepositoryPort
     dm: DmRepositoryPort
     delivery_claims: DeliveryClaimPort | None = None
+    moderation: ModerationRepositoryPort | None = None
+    message_log: MessageLogPort | None = None

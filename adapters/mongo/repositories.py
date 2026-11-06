@@ -13,6 +13,8 @@ from typing import Any
 
 from ports.repositories import RepositoryBundle
 from adapters.mongo.claims import MongoDeliveryClaims
+from adapters.mongo.message_log import MongoMessageLog
+from adapters.mongo.moderation import MongoModerationRepository
 
 
 class MongoChatRepository:
@@ -120,6 +122,8 @@ class MongoRepositoryBundle:
     stats: MongoStatsRepository
     dm: MongoDmRepository
     delivery_claims: MongoDeliveryClaims
+    moderation: MongoModerationRepository
+    message_log: MongoMessageLog
 
 
 def create_mongo_repositories(database: Any) -> RepositoryBundle:
@@ -130,6 +134,8 @@ def create_mongo_repositories(database: Any) -> RepositoryBundle:
         stats=MongoStatsRepository(database),
         dm=MongoDmRepository(database),
         delivery_claims=MongoDeliveryClaims(database),
+        moderation=MongoModerationRepository(database),
+        message_log=MongoMessageLog(database),
     )
     return RepositoryBundle(
         chats=bundle.chats,
@@ -137,4 +143,6 @@ def create_mongo_repositories(database: Any) -> RepositoryBundle:
         stats=bundle.stats,
         dm=bundle.dm,
         delivery_claims=bundle.delivery_claims,
+        moderation=bundle.moderation,
+        message_log=bundle.message_log,
     )

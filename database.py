@@ -75,6 +75,10 @@ class Database:
         from adapters.mongo.site_feedback import SiteFeedbackRepository
         self._site_feedback_repo = SiteFeedbackRepository(self._db)
         await self._site_feedback_repo.ensure_indexes()
+        from adapters.mongo.moderation import MongoModerationRepository
+        await MongoModerationRepository(self).ensure_indexes()
+        from adapters.mongo.message_log import MongoMessageLog
+        await MongoMessageLog(self).ensure_indexes()
         from adapters.mongo.menu_flow import MongoMenuFlowRepository
         self._menu_flow_repo = MongoMenuFlowRepository(self._db)
         await self._menu_flow_repo.ensure_indexes()

@@ -6,6 +6,7 @@ Runtime текущего бота пока остаётся на существ�
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -85,6 +86,23 @@ class ChannelPort(Protocol):
         only_if_banned: bool = True,
     ) -> None:
         """Разбанить пользователя, если канал это поддерживает."""
+        ...
+
+    async def can_restrict_members(self, target: ChannelRef, user_id: str | int) -> bool:
+        """Может ли пользователь банить/мутить участников (админ с этим правом или владелец чата)."""
+        ...
+
+    async def mute_user(
+        self,
+        target: ChannelRef,
+        user_id: str | int,
+        until: datetime | None = None,
+    ) -> None:
+        """Запретить пользователю писать до ``until`` (None — бессрочно)."""
+        ...
+
+    async def unmute_user(self, target: ChannelRef, user_id: str | int) -> None:
+        """Снять запрет на сообщения, вернув права чата по умолчанию."""
         ...
 
     async def approve_join_request(self, target: ChannelRef, user_id: str | int) -> None:

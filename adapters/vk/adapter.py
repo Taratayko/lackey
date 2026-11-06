@@ -83,6 +83,15 @@ class VkChannelAdapter(ChannelPort):
     ) -> None:
         raise NotImplementedError("VK unban_user is not implemented in Patch 12 MVP")
 
+    async def can_restrict_members(self, target: ChannelRef, user_id: str | int) -> bool:
+        raise NotImplementedError("VK moderation is not implemented")
+
+    async def mute_user(self, target: ChannelRef, user_id: str | int, until=None) -> None:
+        raise NotImplementedError("VK moderation is not implemented")
+
+    async def unmute_user(self, target: ChannelRef, user_id: str | int) -> None:
+        raise NotImplementedError("VK moderation is not implemented")
+
     async def approve_join_request(self, target: ChannelRef, user_id: str | int) -> None:
         raise NotImplementedError("VK join requests are not supported in Patch 12 MVP")
 

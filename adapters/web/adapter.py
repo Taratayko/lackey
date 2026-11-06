@@ -122,6 +122,15 @@ class WebChannelAdapter(ChannelPort):
     ) -> None:
         raise NotImplementedError("Web moderation is not implemented in Patch 13 MVP")
 
+    async def can_restrict_members(self, target: ChannelRef, user_id: str | int) -> bool:
+        raise NotImplementedError("Web moderation is not implemented")
+
+    async def mute_user(self, target: ChannelRef, user_id: str | int, until=None) -> None:
+        raise NotImplementedError("Web moderation is not implemented")
+
+    async def unmute_user(self, target: ChannelRef, user_id: str | int) -> None:
+        raise NotImplementedError("Web moderation is not implemented")
+
     async def approve_join_request(self, target: ChannelRef, user_id: str | int) -> None:
         raise NotImplementedError("Web join requests are not implemented in Patch 13 MVP")
 

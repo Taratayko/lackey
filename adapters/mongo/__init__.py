@@ -1,4 +1,6 @@
 """Mongo adapter public API."""
+from .message_log import MongoMessageLog
+from .moderation import MongoModerationRepository
 from .repositories import (
     MongoChatRepository,
     MongoDmRepository,
@@ -9,6 +11,8 @@ from .repositories import (
 )
 
 __all__ = [
+    "MongoMessageLog",
+    "MongoModerationRepository",
     "MongoChatRepository",
     "MongoDmRepository",
     "MongoRepositoryBundle",

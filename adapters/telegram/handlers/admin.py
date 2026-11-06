@@ -1,15 +1,16 @@
 """Telegram handlers for lists, help and owner admin commands."""
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
 from application.services import AdminCommandResult, AdminService
 from config import settings
 from database import db
-from presentation.texts import DM_HELP, GROUP_HELP
+from presentation.texts import DM_HELP, GROUP_HELP, GROUP_HELP_ADMIN
 
 from .common import send_rich
+from .moderation import is_moderator
 
 router = Router()
 
@@ -149,9 +150,15 @@ async def cmd_listall(msg: Message):
 
 
 @router.message(Command("help"))
-async def cmd_help(msg: Message):
+async def cmd_help(msg: Message, bot: Bot):
     # Rich Message: в справке настоящие блоки/цитаты, поэтому send_rich, а не reply.
-    text = DM_HELP if msg.chat.type == "private" else GROUP_HELP
+    if msg.chat.type == "private":
+        text = DM_HELP
+    elif await is_moderator(bot, msg):
+        # Тем, кто может банить и мутить, дополнительно показываем команды модерации.
+        text = GROUP_HELP_ADMIN
+    else:
+        text = GROUP_HELP
     await send_rich(msg, text)
 
 

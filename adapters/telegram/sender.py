@@ -6,12 +6,18 @@ aiogram-хэндлерами, но отправка постепенно ухо�
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import FSInputFile, Message as TelegramMessage, ReactionTypeEmoji
+from aiogram.types import (
+    ChatPermissions,
+    FSInputFile,
+    Message as TelegramMessage,
+    ReactionTypeEmoji,
+)
 
 from domain.models import (
     Attachment,
@@ -208,6 +214,44 @@ async def unban_chat_member(bot: Bot, chat_id: int, user_id: int,
     )
 
 
+async def mute_chat_member(
+    bot: Bot, chat_id: int, user_id: int, until: datetime | None = None,
+) -> None:
+    """Запретить участнику писать (until=None — бессрочно)."""
+    await bot.restrict_chat_member(
+        chat_id=chat_id,
+        user_id=user_id,
+        permissions=ChatPermissions(can_send_messages=False),
+        until_date=until,
+    )
+
+
+async def unmute_chat_member(bot: Bot, chat_id: int, user_id: int) -> None:
+    """Вернуть участнику права чата по умолчанию (а не «все права»)."""
+    permissions = None
+    try:
+        chat = await bot.get_chat(chat_id)
+        permissions = getattr(chat, "permissions", None)
+    except Exception:
+        permissions = None
+    if permissions is None:
+        permissions = ChatPermissions(
+            can_send_messages=True,
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+            can_send_polls=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True,
+        )
+    await bot.restrict_chat_member(
+        chat_id=chat_id, user_id=user_id, permissions=permissions,
+    )
+
+
 class TelegramChannelAdapter(ChannelPort):
     """Telegram transport implementation of ChannelPort."""
 
@@ -320,6 +364,31 @@ class TelegramChannelAdapter(ChannelPort):
     async def get_self_user_id(self) -> int:
         me = await self._bot.get_me()
         return int(me.id)
+
+    async def can_restrict_members(self, target: ChannelRef, user_id: str | int) -> bool:
+        try:
+            member = await self._bot.get_chat_member(
+                chat_id=_to_int(target.external_chat_id),
+                user_id=_to_int(user_id),
+            )
+        except Exception:
+            return False
+        if member.status == "creator":
+            return True
+        return member.status == "administrator" and bool(
+            getattr(member, "can_restrict_members", False)
+        )
+
+    async def mute_user(self, target: ChannelRef, user_id: str | int,
+                        until: datetime | None = None) -> None:
+        await mute_chat_member(
+            self._bot, _to_int(target.external_chat_id), _to_int(user_id), until,
+        )
+
+    async def unmute_user(self, target: ChannelRef, user_id: str | int) -> None:
+        await unmute_chat_member(
+            self._bot, _to_int(target.external_chat_id), _to_int(user_id),
+        )
 
     async def ban_user(self, target: ChannelRef, user_id: str | int) -> None:
         await ban_chat_member(self._bot, _to_int(target.external_chat_id), _to_int(user_id))
