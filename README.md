@@ -1,257 +1,219 @@
-## Меню `(つ✧ω✧)つ` — «В гости» / «Вписаться» (04.11.2026)
+# Лакей (Commune Mesh Lackey)
 
-- Постоянная Reply Keyboard и inline-меню по ТЗ `docs/lakey-tz.md`: `Вписаться`, `В гости`, `Написать`, `Список коммун`, `Поддержка`.
-- Сценарии «В гости» и «Вписаться» шлют заявку в коммуну через общий DeliveryPipeline (reply-цепочки, anti-duplicate, `/anon`).
-- Состояние шагов — Mongo `menu_flows` с TTL 20 минут. Принятые решения и открытые вопросы: `docs/patches/README_MENU_20261104.md`.
+Telegram-бот — почтальон и менеджер коммунарских беседок КоммуСети.
+Связывает чаты между собой: ретрансляция сообщений, reply-цепочки, пересылка,
+анонимные ЛС-сессии, справочник коммун, модерация и обратная связь по сайту.
 
-## Патч A — SiteFeedback (21.10.2026)
+> © Митя Таратайко ([t.me/thetrtk](https://t.me/thetrtk)). Все права защищены.
+> Использование кода без письменного разрешения автора запрещено — см. [LICENSE.md](LICENSE.md).
 
-- `/communesite` (`/communeSite`) в ЛС: отзывы по разделам сайта, предложения новых страниц, свои обращения.
-- `/sitefeedback` и `/sfnote` только для `ADMIN_ID` в ЛС: очередь, фильтры, поиск по Telegram ID / известным username, решения и уведомления.
-- Отдельные коллекции Mongo `site_feedback_*`, автосоздание индексов; `/start communesite` подготовлен для будущего анонса.
-- **Рассылка B не запускается**. Сначала интеграция C и сквозные тесты A+C, затем отдельное решение о публикации.
-- Все авторы видны администрации по Telegram ID; `/anon` в ретрансляции не скрывает автора предложений.
-- Подробнее: `docs/patches/README_SITE_FEEDBACK_A_20261021.md`.
+## Возможности
 
-## Stage 4 — forward через reply, тесты, обслуживание (2026-10-20)
+- **Ретрансляция.** Сообщение вида `НазваниеКоммуны! текст` из беседы или ЛС уходит в нужную коммуну. Работают текст, медиа, альбомы и подписи.
+- **Reply-цепочки.** Ответ на сообщение бота продолжает диалог в обе стороны без ограничений.
+- **Пересылка.** Reply с `НазваниеКоммуны!` пересылает чужое сообщение; `НазваниеКоммуны! комментарий` добавляет подпись.
+- **Анонимность в ЛС.** `/anon` и `/deanon`.
+- **Меню `(つ✧ω✧)つ`.** Reply Keyboard и inline-меню: «Вписаться», «В гости», «Написать», «Список коммун», «Поддержка». Сценарии шлют заявку в коммуну через общий DeliveryPipeline. Спецификация — `docs/lakey-tz.md`.
+- **Модерация.** Мут, бан, разбан и списки; при бане удаляются недавние сообщения нарушителя.
+- **Обратная связь по сайту.** `/communesite` в ЛС: отзывы по разделам, предложения новых страниц, свои обращения; очередь для владельца.
+- **Защита от дублей.** Атомарные `delivery_claims` в MongoDB; при сбое бот не отправляет сообщение повторно (fail closed).
+- **е/ё не различаются** в названиях и алиасах коммун; регистр не важен.
+- **Диагностика.** `/diag` и `/health` для владельца.
 
-- Reply с явной командой `НазваниеКоммуны!` пересылает исходное сообщение другого участника либо бота; `НазваниеКоммуны! комментарий` добавляет подпись к заголовку. Обычные reply-цепочки без такой команды остаются прежними.
-- **Важно:** если бот не администратор группы и Privacy Mode включён, Telegram может вообще не отправить боту update для reply на чужое сообщение. Сделайте бота администратором либо отключите Privacy Mode в @BotFather и пере-добавьте бота в группу.
-- При невозможности forward защищённого контента бот показывает понятную ошибку; новое вложение в reply с командой forward намеренно не принимается.
-- Удалены растущие локальные `_reply_locks`; дубль защищается Mongo `delivery_claims` Stage 3. В Windows-скрипте больше нет требования прав администратора.
-- `TELEGRAM_PROXY_URL` теперь реально используется **если указан**; если старое значение указывает на несуществующий локальный прокси, установите `TELEGRAM_PROXY_URL=` в `.env`.
+## Стек
 
-Полное описание, откат и сценарии проверки: `docs/patches/README_STAGE4_FORWARD_REPLY_20261020.md`.
+Python 3.13 · aiogram 3 · MongoDB (motor) · pydantic-settings · rich
 
-## Stage 3 — MongoDB durability and duplicate protection (2026-10-17)
-
-- New atomic `delivery_claims` guard protects text/media/forward/reply/album from duplicate source updates, including across bot restarts. It uses MongoDB `_id` uniqueness before Telegram API calls. If MongoDB cannot claim, the message is not sent (fail closed).
-- Claims that are `dispatching` (crash during delivery) or `uncertain` (network error before message ID was returned) are **never automatically retried**: sending again could duplicate a message. Admin review is required. No automatic TTL; claims are small but persistent.
-- `threads` now carry platform-qualified fields (`origin_channel`, `relay_channel`, `*_external_chat_id`) and new compound lookup indexes, while old Telegram scalar fields and Stage 2 array aliases remain readable.
-- Stats keep the permanent `total`, but no longer append to unlimited `timestamps`; compact `stats_daily` counters are used for recent activity. Old timestamp arrays are retained for backwards-readable history. Recent daily counts include the entire boundary day and can overcount by less than a day.
-- `/diag` shows new collections and claim statuses. The live runtime still supports **Telegram** only; the new metadata prepares storage for future VK/Web work, not a VK/Web launch.
-
-See `docs/patches/README_STAGE3_MONGO_20261017.md` for install, verification, limitations, and rollback. The *forward-another-message-via-reply* workflow is separate and was **not** changed in Stage 3.
-
-# COMM (Лакей)
-
-Telegram-бот — почтальон и менеджер коммунарских/анархических беседок.
-Связывает беседы между собой: ретрансляция сообщений, reply-цепочки, анонимные
-ЛС-сессии и мультигородские справочники `/list`.
-
-## Структура файлов
+## Структура
 
 ```
-COMM/
-├── bot.py           # Точка входа
-├── config.py        # Настройки (читает из .env)
-├── database.py      # Слой MongoDB (motor)
-├── handlers.py      # Compatibility shim: экспортирует router из adapters.telegram.handlers
-├── presentation/     # Тексты и HTML-форматтеры
-├── domain/           # Доменные модели будущего communication core
-├── ports/            # Контракты будущих адаптеров/репозиториев
-├── adapters/         # Реализации Telegram/VK/Web/Mongo
-│   └── telegram/handlers/ # Telegram router layer для aiogram-хэндлеров
-├── application/      # Сервисы бизнес-логики
-├── docs/patches/     # README по каждому патчу
-├── requirements.txt
-├── start_bot.bat     # Запуск на Windows (ascii-арт + автозапрос прав админа)
-├── .env.example      # Пример настроек без секретов
-└── .env              # Локальные секреты, не хранить в git
+├── bot.py             # Точка входа
+├── config.py          # Настройки (pydantic-settings, читает .env)
+├── database.py        # Слой MongoDB (motor)
+├── handlers.py        # Shim: экспортирует router из adapters.telegram.handlers
+├── banner.py          # Заставка при запуске
+├── site_feedback_sync.py  # Отдельный worker синхронизации SiteFeedback
+├── domain/            # Доменные модели
+├── ports/             # Контракты адаптеров и репозиториев
+├── application/       # Сервисы бизнес-логики
+├── adapters/
+│   ├── telegram/      # Рабочий runtime: handlers, sender, альбомы
+│   ├── mongo/         # Репозитории
+│   ├── vk/            # MVP, не подключён к runtime
+│   └── web/           # MVP, не подключён к runtime
+├── presentation/      # Тексты и форматтеры
+├── scripts/           # Служебные скрипты
+├── deploy/            # Примеры systemd-юнитов
+├── tests/             # unittest
+└── docs/              # ТЗ и архив патчей (docs/patches/)
 ```
 
-## Установка
+## Установка и запуск
 
 ```bash
 pip install -r requirements.txt
-# создайте .env по образцу ниже
+cp .env.example .env   # заполните значения
 python bot.py
 ```
 
-На Windows можно запустить `start_bot.bat` — права администратора не нужны;
-скрипт запускает бота из его каталога.
+На Windows можно запустить `start_bot.bat`: он использует `.venv`, если она есть,
+иначе `py -3.13`. Права администратора не нужны.
 
-## Переменные окружения (.env)
+Тесты:
 
-| Переменная  | Описание                               |
-|-------------|-----------------------------------------|
-| BOT_TOKEN   | Токен от @BotFather                     |
-| MONGODB_URI | URI подключения к MongoDB               |
-| DB_NAME     | Имя базы данных (по умолчанию `tgbot`)  |
-| ADMIN_ID    | Telegram ID владельца бота              |
-| TELEGRAM_PROXY_URL | URL proxy для Telegram, пусто = без proxy |
-| VK_ENABLED | Включать VK runtime позже; сейчас по умолчанию `false` |
-| VK_GROUP_ID | ID VK-группы для будущего Bots Long Poll |
-| VK_GROUP_TOKEN | Токен VK-группы, не хранить в git |
-| VK_API_VERSION | Версия VK API для adapter MVP |
-| VK_LONGPOLL_WAIT | Wait-секунды для будущего VK Long Poll runner |
-| WEB_ENABLED | Включать будущий Web/Site runtime; сейчас по умолчанию `false` |
-| WEB_API_TOKEN | Token для будущего site/API слоя, не хранить в git |
-| WEB_PUBLIC_BASE_URL | Публичный URL будущего сайта коммун |
+```bash
+python -m unittest discover -s tests
+```
 
+## Переменные окружения
 
-## Патчи рефакторинга
+| Переменная | Описание |
+|---|---|
+| `BOT_TOKEN` | Токен от @BotFather |
+| `ADMIN_ID` | Telegram ID владельца бота |
+| `MONGODB_URI` | URI подключения к MongoDB (по умолчанию `mongodb://localhost:27017`) |
+| `DB_NAME` | Имя базы данных (по умолчанию `tgbot`) |
+| `TELEGRAM_PROXY_URL` | URL proxy для Telegram; пусто — без proxy |
+| `SITE_FEEDBACK_BASE_URL` | Базовый URL страниц обратной связи сайта |
+| `SITE_FEEDBACK_SYNC_URL` | Адрес синхронизации с сайтом; пусто — синхронизация выключена |
+| `SITE_FEEDBACK_SYNC_TOKEN` | Токен синхронизации, не хранить в git |
+| `SITE_FEEDBACK_SYNC_INTERVAL` | Интервал синхронизации, секунды (по умолчанию `20`) |
+| `VK_ENABLED`, `VK_GROUP_ID`, `VK_GROUP_TOKEN`, `VK_API_VERSION`, `VK_LONGPOLL_WAIT` | Настройки VK-адаптера. Runtime не запускается, по умолчанию `VK_ENABLED=false` |
+| `WEB_ENABLED`, `WEB_API_TOKEN`, `WEB_PUBLIC_BASE_URL` | Настройки Web-адаптера. Runtime не запускается, по умолчанию `WEB_ENABLED=false` |
 
-- `docs/patches/README_PATCH_01.md` — L2.5 skeleton: env/config, тексты, форматтеры, стартовые заготовки `domain`/`ports`/`adapters`/`application`.
-- `docs/patches/README_PATCH_01A.md` — build.sh и ASCII-only hotfix запуска на Windows.
-- `docs/patches/README_PATCH_02.md` — универсальные модели `ChannelRef` / `Message` / `Attachment` под Telegram/VK/Web.
-- `docs/patches/README_PATCH_03.md` — repository layer над Mongo: контракты портов и Mongo-адаптеры без изменения runtime-поведения.
-- `docs/patches/README_PATCH_04.md` — Telegram sender/media adapter: отправка текста, медиа и реакций вынесена из handlers в адаптер.
-- `docs/patches/README_PATCH_05.md` — RelayService: обычная текстовая ретрансляция из чатов и ЛС вынесена в application-слой.
-- `docs/patches/README_PATCH_06.md` — ReplyService: reply-цепочки вынесены в application-слой через repository layer и Telegram channel adapter.
-- `docs/patches/README_PATCH_07.md` — ModerationService: бан, мегабан, разбан, banlist и cleanup сообщений вынесены в application-слой (позже модуль модерации удалён из бота).
-- `docs/patches/README_MODERATION_20261106.md` — мут/размут/бан/разбан/banlist заново: журнал в Mongo, права через `can_restrict_members`, версия `/help` для админов.
-- `docs/patches/README_PATCH_08.md` — CaptchaService: онбординг, captcha-сессии, approve/decline и onboarding-log вынесены в application-слой (позже модуль капчи полностью удалён из бота).
-- `docs/patches/README_PATCH_09.md` — AdminService: списки, статистика и команды владельца для управления чатами вынесены в application-слой.
-- `docs/patches/README_PATCH_10.md` — Telegram handler package: корневой `handlers.py` стал compatibility shim, фактический router перенесён в `adapters/telegram/handlers/`.
-- `docs/patches/README_PATCH_10B.md` — Telegram handlers split: moderation/admin/help/list вынесены в отдельные подроутеры, `main.py` оставлен для relay/DM/reply входов.
-- `docs/patches/README_PATCH_10C.md` — Telegram handler package activation: корневой `handlers.py` стал реальным compatibility shim и включает пакет `adapters.telegram.handlers`.
-- `docs/patches/README_PATCH_10D.md` — Telegram handlers split: DM/личные сообщения вынесены в отдельный подроутер, общие Telegram helpers вынесены в `common.py`.
-- `docs/patches/README_PATCH_10E.md` — hotfix DM/reply: ЛС-router больше не перехватывает reply-цепочки, их снова обрабатывает ReplyService.
-- `docs/patches/README_PATCH_11.md` — DiagnosticsService: owner-only команды `/diag` и `/health` для проверки Mongo, коллекций, чатов, thread mapping и индексов.
-- `docs/patches/README_PATCH_12.md` — VK adapter MVP: изолированный VK API client, mapper, ChannelPort adapter и Long Poll runner skeleton без подключения к runtime.
-- `docs/patches/README_PATCH_13.md` — Web/Site adapter MVP: framework-agnostic DTO/mapper/API boundary и WebChannelAdapter без запуска web runtime.
-- `docs/patches/README_STAGE1_SECURITY_20261015.md` — security fix, HTML, redirect и безопасная постобработка Mongo.
-- `docs/patches/README_STAGE2_UNIFIED_DELIVERY_20261017.md` — единая доставка текста/медиа/forward/reply, топики, альбомы и multi-ID mapping.
-- `docs/patches/README_STAGE3_MONGO_20261017.md` — атомарные delivery claims, Mongo indexes, статистика по дням.
-- `docs/patches/README_STAGE4_FORWARD_REPLY_20261020.md` — reply-forward, Privacy Mode, тесты и рефакторинг.
+Файл `.env` с секретами в git не хранится.
 
 ## Группы чатов
 
-| Группа    | Описание                                          |
-|-----------|----------------------------------------------------|
-| `msk`     | Московские беседы                                   |
-| `spb`     | Питерские беседы                                    |
-| `vlk`     | Владивостокские беседы ⛵️                            |
-| `krm`     | Крымские беседы 🦅                                   |
-| `special` | Спецчаты (получают/отвечают, сами не отправляют)    |
+| Группа | Описание |
+|---|---|
+| `msk` | Московские беседы |
+| `spb` | Питерские беседы |
+| `vlk` | Владивостокские беседы ⛵️ |
+| `special` | Спецчаты: получают и отвечают, сами не начинают отправку |
 
-Региональные города (всё кроме `msk`/`spb`/`special`) хранятся в едином
-реестре `REG_CITIES` в `adapters/telegram/handlers/admin.py` — это текущий источник правды для Telegram admin/list слоя
-для `/list`, `/listreg`, полного списка в ЛС и проверки `group` в `/addchat`.
-Чтобы добавить новый регион, достаточно дописать туда тройку
-`("код_группы", "Прилагательное", "эмодзи")` — он автоматически появится
-во всех списках.
+Региональные города (всё кроме `msk`, `spb`, `special`) задаются реестром `REG_CITIES`
+в `adapters/telegram/handlers/admin.py`. Он используется для `/list`, `/listreg`,
+полного списка в ЛС и проверки группы в `/addchat`. Чтобы добавить регион, допишите
+тройку `("код_группы", "Прилагательное", "эмодзи")`:
 
 ```python
 REG_CITIES: list[tuple[str, str, str]] = [
     ("vlk", "Владивостокские", "⛵️"),
-    ("krm", "Крымские", "🦅"),
-    # 🔮 Здесь появятся новые города
 ]
 ```
 
 ## Правила маршрутизации
 
-- **Специальные** не могут *отправлять*, но могут *получать* и *отвечать*
-- **Неглавные** (`is_chief=false`) могут писать в **неглавные** и **специальные**, но **не в главные** (включая redirect)
-- **Главные** могут писать в любые чаты; **специальные** могут получать и отвечать, но не начинать новую отправку
-- Reply-цепочки работают бесконечно в обе стороны
-- Чат можно привязать к конкретному топику форума (`/settopic`) — тогда бот
-  реагирует только в нём, а не во всём чате
+- Неглавные чаты (`is_chief=false`) пишут в неглавные и специальные, но не в главные (включая redirect).
+- Главные чаты пишут в любые.
+- Специальные не начинают отправку, но получают и отвечают.
+- Reply-цепочки работают в обе стороны без ограничений.
+- Чат можно привязать к топику форума (`/settopic`): тогда бот реагирует только в нём. Уже созданные reply-цепочки используют сохранённые топики.
 
-## Добавление чатов
-
-Добавьте бота в нужный чат, затем отправьте (от имени `ADMIN_ID`):
-
-```
-/addchat msk true Клубника https://t.me/klubnika
-/addchat msk false Твари https://t.me/tvari
-/addalias Бестиарий
-/addalias Лешие
-/addchat spb true Флажок https://t.me/flagok
-/addchat vlk true Пассад https://t.me/passad_commune
-/addchat krm false Маяк https://t.me/mayak
-/addchat special false Локей https://t.me/lokei
-```
-
-## Пользовательские команды
-
-| Команда      | Описание                                          |
-|--------------|----------------------------------------------------|
-| `/start`     | Приветствие в ЛС (новым — список всех коммун)      |
-| `/list`      | Список коммун группы текущего чата (в ЛС — полный) |
-| `/listmsk`   | Московские + региональные + специальные            |
-| `/listspb`   | Питерские + региональные + специальные              |
-| `/listreg`   | Только региональные (vlk, krm, ...) + специальные   |
-| `/stat`      | Статистика сообщений                                |
-| `/anon`      | Писать анонимно (только в ЛС)                       |
-| `/deanon`    | Писать от своего имени (только в ЛС)                |
-| `/help`      | Справка — текст зависит от контекста (см. ниже)     |
-
-## Модерация в беседах (06.11.2026)
-
-Команды доступны админам чата с правом «Блокировка пользователей», владельцу
-бота (`ADMIN_ID`) и анонимным админам. Работают ответом на сообщение нарушителя;
-те же слова без `/` — «мут», «размут», «бан», «разбан».
-
-| Команда                        | Описание                                                        |
-|--------------------------------|------------------------------------------------------------------|
-| `/mute [срок] [причина]`       | Запретить писать. Срок: `30 минут`, `2 часа`, `1 день`, `30 дней`, `навсегда` (коротко: `30м`, `2ч`, `1д`, `1н`); без срока — 1 час |
-| `/unmute [@ник]`               | Снять мут (ответом или по @нику из журнала)                      |
-| `/mutelist`                    | Список замученных с оставшимся временем                          |
-| `/ban [причина]`               | Бан в текущем чате + удаление сообщений нарушителя (см. ниже)    |
-| `/unban [@ник]`                | Разбан (ответом или по @нику из журнала)                         |
-| `/banlist`                     | Чёрный список чата                                               |
-
-`/help` в беседе показывает эти команды только тем, кто может ими пользоваться.
-
-**Зачистка при бане.** Bot API не отдаёт историю сообщений, поэтому бот запоминает
-id сообщений участников групп (коллекция `user_messages`, хранится 7 суток, TTL-индекс).
-При `/ban` удаляются все сообщения нарушителя, которые бот успел увидеть за этот срок,
-плюс сообщение, на которое ответила команда. Боту нужно право «Удаление сообщений».
-Подробности — `docs/patches/README_MODERATION_20261106.md`.
-
-## Отправка сообщения
-
-Формат маршрутизации в зарегистрированном чате или ЛС — **название + `!`**:
+## Отправка сообщений
 
 ```
 Твари! привет
 Могильный Платон! текст сообщения
 ```
 
-- Фото/видео с подписью `Твари! текст` передаются с подписью.
-- `Твари!` на фото/видео передаёт медиа без дополнительного текста.
-- Reply на чужое сообщение с текстом `Твари!` пересылает его в Твари:
-  приходит отдельный заголовок и пересланный оригинал; **reply работает на обоих**.
-- Reply стикером или видеокружочком на бот-сообщение отправляет в другую
-  беседу заголовок + медиа; отвечать можно на любой элемент.
-- Альбом из нескольких фото/видео отправляется целиком, если в его подписи
-  указана цель. Все доставленные части связываются с одним диалогом.
-- Если чат привязан к топику `/settopic`, новые команды из других топиков
-  игнорируются. Уже созданные reply-цепочки используют сохранённые топики.
+- Фото/видео с подписью `Название! текст` уходят с подписью; `Название!` без текста передаёт медиа без подписи.
+- Альбом отправляется целиком, если цель указана в подписи.
+- Reply с `Название!` на чужое сообщение пересылает его: приходит заголовок и пересланный оригинал.
+- Reply стикером или видеокружочком на сообщение бота отправляет в другую беседу заголовок и медиа.
+- Бот ставит реакцию ✍ после успешной доставки.
 
-После успешной доставки бот пытается поставить реакцию ✍; запись mapping,
-статистика и реакция не должны вызывать дублирующую отправку.
+**Privacy Mode.** Если бот не администратор группы и Privacy Mode включён, Telegram может не присылать
+update для reply на чужое сообщение. Сделайте бота администратором либо отключите Privacy Mode в
+@BotFather и добавьте бота в группу заново.
 
-## Admin-команды (только ADMIN_ID)
+## Команды
 
-| Команда                                   | Описание                              |
-|---------------------------------------------|------------------------------------------|
-| `/addchat <group> <chief> <name> [link]`    | Зарегистрировать текущий чат               |
-| `/removechat`                               | Удалить текущий чат из БД                  |
-| `/addalias <алиас>`                         | Добавить псевдоним (aka)                   |
-| `/removealias <алиас>`                      | Удалить псевдоним                          |
-| `/setlink <url>`                            | Задать ссылку для `/list`                  |
-| `/setchief true\|false`                     | Пометить/снять «главный чат»               |
-| `/sethidden true\|false`                    | Скрыть/показать чат в `/list`              |
-| `/setredirect <chat_id>`                    | Перенаправить входящие в другой чат (0 — сброс) |
-| `/settopic <topic_id>`                      | Привязать чат к топику форума (0 — сброс)  |
-| `/cleartopic`                               | Снять привязку к топику                    |
-| `/chatinfo`                                 | Инфо о текущем чате из БД                  |
-| `/listall`                                  | Все зарегистрированные чаты                |
-| `/pleh`                                     | Полный список служебных команд (только владельцу) |
+### Для всех
 
-## Стек
+| Команда | Описание |
+|---|---|
+| `/start` | Приветствие в ЛС |
+| `/list` | Список коммун группы чата (в ЛС — полный) |
+| `/listmsk`, `/listspb`, `/listreg` | Московские / питерские / региональные + специальные |
+| `/stat` | Статистика сообщений |
+| `/anon`, `/deanon` | Анонимный режим в ЛС |
+| `/communesite` | Отзывы и предложения по сайту (в ЛС) |
+| `/cancel` | Отменить текущий ввод |
+| `/help` | Справка, зависит от контекста |
 
-Python 3.13 · aiogram 3 · MongoDB (motor) · pydantic-settings · rich (для
-заставки при запуске)
+### Модерация
 
-### Patch C Remote — Communars Feedback (два сервера)
+Доступна админам чата с правом «Блокировка пользователей», владельцу (`ADMIN_ID`) и анонимным админам.
+Работает ответом на сообщение нарушителя; слова «мут», «размут», «бан», «разбан» без `/` тоже работают.
 
-Синхронизация через **исходящий HTTPS от Lackey к сайту**, отдельный worker
-`site_feedback_sync.py` и MySQL-копия обращений на сайте. Входящие порты
-Lackey / SSH-туннели не нужны. Настройка и SQL-миграция — в
-`docs/patches/README_STAGEC_COMMUNARS_INTEGRATION_20261021.md`.
-Массовая рассылка (B) запрещена до успешных проверок A+C.
+| Команда | Описание |
+|---|---|
+| `/mute [срок] [причина]` | Срок: `30 минут`, `2 часа`, `1 день`, `навсегда` (коротко: `30м`, `2ч`, `1д`, `1н`); без срока — 1 час |
+| `/unmute [@ник]` | Снять мут (ответом или по @нику из журнала) |
+| `/mutelist` | Замученные с оставшимся временем |
+| `/ban [причина]` | Бан в чате и удаление сообщений нарушителя |
+| `/unban [@ник]` | Разбан |
+| `/banlist` | Чёрный список чата |
+
+**Зачистка при бане.** Bot API не отдаёт историю сообщений, поэтому бот хранит id сообщений участников
+(коллекция `user_messages`, TTL 7 суток). При `/ban` удаляются все увиденные за этот срок сообщения нарушителя
+и сообщение, на которое ответила команда. Нужно право «Удаление сообщений».
+
+### Только владелец (`ADMIN_ID`)
+
+| Команда | Описание |
+|---|---|
+| `/addchat <group> <chief> <name> [link]` | Зарегистрировать текущий чат |
+| `/removechat` | Удалить текущий чат из БД |
+| `/addalias <алиас>`, `/removealias <алиас>` | Добавить / удалить псевдоним |
+| `/setlink <url>` | Ссылка для `/list` |
+| `/setchief true\|false` | Пометить / снять «главный чат» |
+| `/sethidden true\|false` | Скрыть / показать чат в `/list` |
+| `/setredirect <chat_id>` | Перенаправить входящие в другой чат (`0` — сброс) |
+| `/settopic <topic_id>`, `/cleartopic` | Привязка к топику форума |
+| `/chatinfo`, `/listall` | Информация о чате / все чаты |
+| `/sitefeedback`, `/sfnote` | Очередь обращений по сайту (в ЛС) |
+| `/diag`, `/health` | Диагностика Mongo, коллекций, claims и индексов |
+| `/pleh` | Полный список служебных команд |
+
+Пример регистрации чатов:
+
+```
+/addchat msk true Клубника https://t.me/klubnika
+/addalias Бестиарий
+/addchat spb true Флажок https://t.me/flagok
+/addchat vlk true Пассад https://t.me/passad_commune
+/addchat special false Локей https://t.me/lokei
+```
+
+## Надёжность доставки
+
+- `delivery_claims` защищают текст, медиа, forward, reply и альбомы от дублей, в том числе после перезапуска.
+- Claims в состоянии `dispatching` (сбой во время доставки) и `uncertain` (сетевая ошибка до получения ID сообщения) **не повторяются автоматически**: повтор мог бы создать дубль. Нужна проверка администратором.
+- `/diag` показывает коллекции и статусы claims.
+- Рассылка по сайтовой обратной связи (B) не запускается, пока не пройдены проверки A+C.
+
+## SiteFeedback и синхронизация с сайтом
+
+Синхронизация идёт через исходящий HTTPS от бота к сайту отдельным worker'ом `site_feedback_sync.py`
+(пример юнита — `deploy/lackey-site-feedback-sync.service.example`). Входящие порты и SSH-туннели не нужны.
+Все авторы видны администрации по Telegram ID; `/anon` в ретрансляции не скрывает автора предложений.
+Настройка и SQL-миграция: `docs/patches/README_STAGEC_COMMUNARS_INTEGRATION_20261021.md`.
+
+## Документация
+
+- `docs/lakey-tz.md` — ТЗ на меню и пользовательские сценарии.
+- `docs/patches/` — архив патчей с описанием, проверкой и откатом ([индекс](docs/patches/README.md)).
+- `application/services/README.md` — обзор сервисов.
+
+## Сборка архива
+
+`./build.sh` собирает zip без `.env`, `.venv` и кешей. Новый файл или папка в корне проекта
+должны быть добавлены в `build.sh`, иначе сборка остановится.
+
+## Лицензия
+
+Все права защищены. Использование, копирование, изменение и распространение кода без разрешения автора
+запрещены. Разрешение — [t.me/thetrtk](https://t.me/thetrtk). Полный текст на русском и английском — [LICENSE.md](LICENSE.md).
